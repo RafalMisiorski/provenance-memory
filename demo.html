@@ -1,0 +1,251 @@
+<title>provenance-memory - agent memory that doesn't go stale</title>
+<style>
+  :root{
+    --paper:#ecedf1; --ink:#14171c; --muted:#5c6572; --rule:#d3d7de; --card:#f7f8fa;
+    --accent:#a9711f; --stale:#bd4f36; --current:#2b8f6e;
+    --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--paper:#0f1216;--ink:#e7eaef;--muted:#8b93a1;--rule:#252b34;--card:#161a20;
+          --accent:#d7a24a;--stale:#e0704f;--current:#42bd93;}
+  }
+  :root[data-theme="light"]{--paper:#ecedf1;--ink:#14171c;--muted:#5c6572;--rule:#d3d7de;--card:#f7f8fa;
+    --accent:#a9711f;--stale:#bd4f36;--current:#2b8f6e;}
+  :root[data-theme="dark"]{--paper:#0f1216;--ink:#e7eaef;--muted:#8b93a1;--rule:#252b34;--card:#161a20;
+    --accent:#d7a24a;--stale:#e0704f;--current:#42bd93;}
+
+  *{box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.55;
+    margin:0;-webkit-font-smoothing:antialiased;font-size:16px}
+  .wrap{max-width:760px;margin:0 auto;padding:clamp(28px,6vw,72px) clamp(18px,5vw,28px)}
+  a{color:var(--accent)}
+  h1,h2{text-wrap:balance;line-height:1.15;margin:0}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 14px}
+  h1{font-size:clamp(1.7rem,4.5vw,2.5rem);font-weight:680;letter-spacing:-.01em}
+  .lede{font-size:1.12rem;color:var(--muted);margin:16px 0 0;max-width:60ch}
+  .rule{height:1px;background:var(--rule);border:0;margin:clamp(34px,6vw,52px) 0}
+  section h2{font-size:1.18rem;font-weight:640;letter-spacing:-.005em;margin-bottom:6px}
+  section > p{color:var(--muted);margin:.4rem 0 0;max-width:62ch}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  .mech{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+  @media(max-width:560px){.mech{grid-template-columns:1fr}}
+  .box{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:16px 16px 18px}
+  .box .lbl{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .box .who{font-weight:640;margin:2px 0 12px;font-size:1.02rem}
+  .rowlist{font-family:var(--mono);font-size:.86rem;display:flex;flex-direction:column;gap:5px}
+  .chip{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-radius:6px;
+    background:color-mix(in srgb,var(--ink) 5%,transparent)}
+  .chip.dead{color:var(--muted)}
+  .chip.old{border-left:3px solid var(--stale)}
+  .chip.cur{border-left:3px solid var(--current)}
+  .verdict{margin-top:12px;font-family:var(--mono);font-size:.86rem}
+  .verdict b.bad{color:var(--stale)}
+  .verdict b.good{color:var(--current)}
+
+  table{width:100%;border-collapse:collapse;margin-top:20px;font-family:var(--mono);font-size:.9rem;
+    font-variant-numeric:tabular-nums}
+  caption{caption-side:bottom;color:var(--muted);font-family:var(--sans);font-size:.82rem;
+    text-align:left;margin-top:10px;line-height:1.5}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--rule)}
+  th{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  td.n{text-align:right}
+  tr.ours td{font-weight:680}
+  .bar{display:inline-block;height:9px;border-radius:2px;vertical-align:middle;margin-right:8px;
+    background:var(--stale);min-width:2px}
+  tr.ours .bar{background:var(--current)}
+  .val{color:var(--stale)} tr.ours .val{color:var(--current)}
+
+  ul.props{list-style:none;margin:20px 0 0;padding:0;display:grid;gap:12px}
+  ul.props li{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
+  .tick{font-family:var(--mono);color:var(--current);font-weight:700;margin-top:1px}
+  ul.props b{font-weight:620}
+  ul.props span{color:var(--muted)}
+
+  /* audit ledger */
+  .ledger{margin-top:22px;display:flex;flex-direction:column;gap:0}
+  .lrow{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:baseline;
+    padding:11px 0;border-bottom:1px solid var(--rule)}
+  .lrow:last-child{border-bottom:0}
+  .lround{font-family:var(--mono);font-size:.74rem;color:var(--muted);letter-spacing:.04em;white-space:nowrap}
+  .lwhat{font-size:.93rem}
+  .lwhat b{font-weight:620}
+  .lcount{font-family:var(--mono);font-size:.82rem;font-variant-numeric:tabular-nums;white-space:nowrap;
+    color:var(--stale)}
+  .lcount.zero{color:var(--current)}
+  .tally{display:flex;gap:20px;flex-wrap:wrap;margin-top:18px;font-family:var(--mono);font-size:.86rem}
+  .tally div{display:flex;flex-direction:column;gap:2px}
+  .tally .big{font-size:1.5rem;font-weight:680;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .tally .cap{font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+  .note{background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--accent);
+    border-radius:8px;padding:14px 16px;margin-top:22px;font-size:.94rem}
+  .note b{color:var(--ink)}
+  pre{background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;overflow-x:auto;
+    font-family:var(--mono);font-size:.85rem;margin-top:16px}
+  pre .c{color:var(--muted)}
+  footer{color:var(--muted);font-size:.8rem;margin-top:clamp(34px,6vw,52px);font-family:var(--mono);line-height:1.6}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">provenance-memory &middot; ~180 lines, zero deps, MIT</p>
+  <h1>Agent memory that updates a fact instead of hoarding every version of it.</h1>
+  <p class="lede">When a fact changes, most agent memory keeps the old value in the index and hands it
+    back later. This one keeps the current value, survives a restart, tells you what it replaced &mdash;
+    and, unusually, has been broken on purpose by four independent adversaries until it stopped breaking.</p>
+
+  <hr class="rule">
+
+  <section>
+    <h2>The failure, shown live</h2>
+    <p>One fact, refund window, changed twice: <span class="mono">30 &rarr; 14 &rarr; 7</span>. What each
+      store holds afterward, and what it returns when you ask.</p>
+    <div class="mech">
+      <div class="box">
+        <div class="lbl">mem0 &middot; auto-update</div>
+        <div class="who">stores all three, recalls by similarity</div>
+        <div class="rowlist">
+          <div class="chip old mono">"refund window is 30"<span>t0</span></div>
+          <div class="chip old mono">"refund window is 14"<span>t1</span></div>
+          <div class="chip cur mono">"refund window is 7"<span>t2</span></div>
+        </div>
+        <div class="verdict">recall &rarr; <b class="bad">30</b> &nbsp;(stale)</div>
+      </div>
+      <div class="box">
+        <div class="lbl">provenance-memory</div>
+        <div class="who">supersedes; keeps one current + an audit trail</div>
+        <div class="rowlist">
+          <div class="chip dead mono">30<span>superseded</span></div>
+          <div class="chip dead mono">14<span>superseded</span></div>
+          <div class="chip cur mono">7<span>current (t2)</span></div>
+        </div>
+        <div class="verdict">recall &rarr; <b class="good">7</b> &nbsp;+ audit: replaced 14</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <h2>The honest measurement</h2>
+    <p>Sealed staleness test (deterministic scoring, no LLM judge), 63 changed facts across 4 seeds,
+      local <span class="mono">llama3.1</span> backend. Fail = a superseded value is returned when the
+      current one is expected.</p>
+    <table>
+      <thead><tr><th>store &amp; how it's used</th><th class="n">stale-on-changed</th></tr></thead>
+      <tbody>
+        <tr><td>mem0 &mdash; as-shipped (recall top-1)</td>
+            <td class="n"><span class="bar" style="width:120px"></span><span class="val">77.8%</span></td></tr>
+        <tr><td>mem0 &mdash; used competently (you attach + sort by timestamp)</td>
+            <td class="n"><span class="bar" style="width:39px"></span><span class="val">25.4%</span></td></tr>
+        <tr class="ours"><td>provenance-memory (deterministic newest-wins)</td>
+            <td class="n"><span class="bar" style="width:2px"></span><span class="val">0.0%</span></td></tr>
+      </tbody>
+      <caption>
+        The fair number is the middle row, not the top one: the 77.8% is partly a usage error (a naive
+        top-1 recall). But even when you attach your own timestamps and sort by them, mem0 stays
+        <b>~25% stale</b> &mdash; because ~24% of the time it doesn't preserve the timestamp you gave it.
+        <br>Caveats on the tin: local 8B backend, N=20&times;4, STALE mode only, wide CI [16&ndash;37%].
+        Directional and reproducible, not a three-decimal benchmark.
+      </caption>
+    </table>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <h2>What it does &mdash; each line a passing test</h2>
+    <ul class="props">
+      <li><span class="tick">&check;</span><div><b>Change-detection, out-of-order safe.</b> <span>The
+        value with the greatest logical timestamp is current. A late-arriving <em>older</em> write is
+        recorded but never dethrones a newer one.</span></div></li>
+      <li><span class="tick">&check;</span><div><b>Cross-session, across processes.</b> <span>Opt-in JSONL
+        log with a stated contract: JSON-native values, corrupt-line tolerant, single-writer. Verified
+        with two separate <span class="mono">python</span> invocations.</span></div></li>
+      <li><span class="tick">&check;</span><div><b>Deterministic + auditable.</b> <span>recall() is an O(1)
+        pure lookup. audit() returns value, when, session, source, revision, and what it replaced &mdash;
+        correct even under out-of-order writes.</span></div></li>
+      <li><span class="tick">&check;</span><div><b>Type-aware + provenance-keeping.</b> <span>1, True, and
+        1.0 are different facts; a different source re-attesting a value is kept as corroboration, not
+        dropped. No black box: no model, no API key, no vector DB, no deps.</span></div></li>
+    </ul>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <h2>How we know it's correct &mdash; the audit ledger</h2>
+    <p>The first version passed its own 10 unit tests and was still wrong. So it was handed to independent
+      adversaries &mdash; separate models, then a <b>different vendor's model</b> &mdash; whose only job was
+      to break it. The cross-vendor round found three bugs four same-family rounds missed. Each defect
+      &mdash; including ones the fixes themselves introduced &mdash; is now a named regression test.</p>
+    <div class="ledger">
+      <div class="lrow"><span class="lround">audit 1 &middot; model A</span>
+        <span class="lwhat"><b>10 bugs</b> in v1: shallow type-equality, arrival-order supersession, no
+          persistence, corrupt-line crash, lying audit trail&hellip;</span>
+        <span class="lcount">10 found</span></div>
+      <div class="lrow"><span class="lround">audit 2 &middot; model B</span>
+        <span class="lwhat">7/10 fixed; found the fix reintroduced disk/memory <b>divergence</b> via an
+          unvalidated field</span>
+        <span class="lcount">+1 HIGH</span></div>
+      <div class="lrow"><span class="lround">audit 3 &middot; model B</span>
+        <span class="lwhat">divergence fixed; found a depth-guard <b>churning</b> deep values + corroboration
+          bloat</span>
+        <span class="lcount">+2</span></div>
+      <div class="lrow"><span class="lround">audit 4 &middot; model B</span>
+        <span class="lwhat">both fixed; found a dedup that <b>dropped</b> a newer write after an
+          out-of-order one</span>
+        <span class="lcount">+1 HIGH</span></div>
+      <div class="lrow"><span class="lround">audit 5 &middot; Codex <b>(cross-vendor)</b></span>
+        <span class="lwhat">a different vendor's model found <b>3 bugs 4 same-family rounds missed</b>: UTF-8
+          bytes crashed load, a NaN line loaded instead of skipping, a deep value crashed on copy</span>
+        <span class="lcount">+3</span></div>
+      <div class="lrow"><span class="lround">audit 5 &middot; re-verify</span>
+        <span class="lwhat">fixes confirmed; caught one that was <b>incomplete</b> &mdash; corrupt bytes inside a
+          quoted string still slipped through &rarr; strict per-line byte-decode</span>
+        <span class="lcount">+1</span></div>
+      <div class="lrow"><span class="lround">final &middot; verify</span>
+        <span class="lwhat">cross-vendor re-verify clean; 4,000 oracle-checked fuzz + 1,500 reload-determinism
+          cases all pass</span>
+        <span class="lcount zero">0 left</span></div>
+    </div>
+    <div class="tally">
+      <div><span class="big">5</span><span class="cap">independent audits</span></div>
+      <div><span class="big">18</span><span class="cap">defects, all fixed</span></div>
+      <div><span class="big">31</span><span class="cap">regression tests</span></div>
+      <div><span class="big">4,000</span><span class="cap">fuzz cases vs an oracle</span></div>
+    </div>
+  </section>
+
+  <div class="note">
+    <b>Where it is <i>not</i> magic (so you don't get sold something):</b> on in-order, single-value-per-key
+    facts this is equivalent to a ~15-line vector-store&nbsp;+&nbsp;newest-wins query. There is no capability
+    moat. The pitch is the opposite of magic: your 15 lines would have had most of those 14 bugs too
+    (out-of-order, mutation, persistence, corroboration). This is the version that already survived four
+    adversaries, so you don't rediscover them in production. The deterministic-freshness idea is also known
+    in the literature (arXiv&nbsp;2606.01435).
+  </div>
+
+  <hr class="rule">
+
+  <section>
+    <h2>Try it</h2>
+    <pre><span class="c"># zero dependencies; runtime needs only the stdlib</span>
+python provenance_memory.py                 <span class="c"># live demo: recall / audit / out-of-order</span>
+python -m pytest test_provenance_memory.py  <span class="c"># 28 properties, ~0.3s</span>
+
+<span class="c"># in your agent:</span>
+from provenance_memory import ProvenanceStore
+m = ProvenanceStore(path="mem.jsonl")       <span class="c"># omit path for pure in-memory</span>
+m.remember("refund_window_days", "30")
+m.remember("refund_window_days", "7")       <span class="c"># supersedes</span>
+m.recall("refund_window_days")              <span class="c"># -> "7", every time, next process too</span></pre>
+  </section>
+
+  <footer>
+    numbers: receipt_mem0_besteffort.json &middot; MEM0_BESTEFFORT_PREREG.md (pre-registered before the run)<br>
+    a measurement, not a pitch &mdash; the caveats, and the four audits, travel with the claim.
+  </footer>
+</div>

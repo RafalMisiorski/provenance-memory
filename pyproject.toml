@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provenance-memory"
+version = "0.1.0"
+description = "A tiny, dependency-free agent memory that doesn't go stale, doesn't lose cross-session facts, and can always tell you why it recalled something."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["agent-memory", "rag", "provenance", "change-detection", "llm", "audit"]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools]
+py-modules = ["provenance_memory", "mem0_shim"]
