@@ -16,15 +16,16 @@
 #     venv_mem0/Scripts/python bench/bench_vs_mem0.py --n 30 --model llama3.1:latest
 #
 """SAMB v0.1 -- measure mem0 (a library that TARGETS the memory problem) on the STALE mode, on a
-sealed clean-value item set, with a fully-LOCAL backend (Ollama Qwen + nomic-embed-text; no API key).
+sealed clean-value item set, with a fully-LOCAL backend (Ollama llama3.1 + nomic-embed-text; no API key).
 
 Why this file exists: chroma/BM25 are generic retrieval -- they don't try to solve supersession.
 mem0's whole pitch IS UPDATE/DELETE/change-detection ("If a memory API handled UPDATE and DELETE
-automatically..." -- r/LangChain, cited in TAXONOMY.md). To make SAMB a credible referee (not a
-strawman ad), the incumbent that targets the problem must be in the table -- including if it beats us.
+automatically..." -- r/LangChain). To make SAMB a credible referee (not a strawman ad), the incumbent
+that targets the problem must be in the table -- including if it beats us.
 
-Run UNDER THE ISOLATED VENV (mem0ai pulls heavy deps we don't want in the main interp):
-    <scratch>/venv_mem0/Scripts/python.exe samb_mem0.py --n 30 --model qwen3.5:9b
+Run UNDER THE ISOLATED VENV (mem0ai pulls heavy deps we don't want in the main interp; see the header
+comment above for the exact recorded-run commands):
+    venv_mem0/Scripts/python bench/bench_vs_mem0.py --n 30 --model llama3.1:latest
 
 Scoring stays deterministic + no-LLM-judge: mem0 returns NL memories, so we tokenize the top memory
 and check whether it carries the CURRENT value (pass), a SUPERSEDED value (stale-fail), or neither
@@ -195,7 +196,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=30)
     ap.add_argument("--seed", type=int, default=1337)
-    ap.add_argument("--model", default="qwen3.5:9b")
+    ap.add_argument("--model", default="llama3.1:latest")  # matches the recorded run in the header
     ap.add_argument("--openai-base", default=None, help="route LLM via an OpenAI-compatible base (Codex shim)")
     ap.add_argument("--smoke", action="store_true", help="1-item wiring smoke test then exit")
     args = ap.parse_args()

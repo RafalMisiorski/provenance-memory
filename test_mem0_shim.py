@@ -113,6 +113,33 @@ def test_persistence_across_process():
         os.remove(path)
 
 
+def test_reset_truncates_and_keeps_persisting():
+    # reset() on a persisted store must wipe the log AND keep persisting to the same path:
+    # a new process re-opening the path sees ONLY post-reset facts (not the silent in-memory
+    # switch the old reset() caused, which dropped persistence while keeping the stale log).
+    fd, path = tempfile.mkstemp(suffix=".jsonl")
+    os.close(fd)
+    try:
+        m = Memory(path=path)
+        m.add("k", "before", user_id="u")
+        m.reset()
+        m.add("k", "after", user_id="u")
+        code = (
+            "from mem0_shim import Memory;"
+            f"m=Memory(path={path!r});"
+            "print(repr(m.get('k', user_id='u')))"
+        )
+        env = dict(os.environ)
+        here = os.path.dirname(os.path.abspath(__file__))
+        env["PYTHONPATH"] = here + os.pathsep + env.get("PYTHONPATH", "")
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                             text=True, cwd=here, env=env)
+        assert out.returncode == 0, out.stderr
+        assert out.stdout.strip() == "'after'", out.stdout   # post-reset write persisted; pre-reset gone
+    finally:
+        os.remove(path)
+
+
 def test_add_returns_current_record_dict():
     m = Memory()
     r = m.add("k", "v", user_id="u")

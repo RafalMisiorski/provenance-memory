@@ -330,9 +330,11 @@ def test_nan_line_is_rejected_on_load():
 
 
 def test_too_deep_value_fails_cleanly_not_recursionerror():
-    """Codex #3: a value nested past the recursion limit must raise a clear ValueError, not crash."""
+    """Codex #3: a value nested past the recursion limit must raise a clear ValueError, not crash.
+    Depth 5000 also overflows repr() at the default limit on 3.12+, so it regresses the persist-path
+    bug where the ValueError message did `{fv!r}` and RecursionError leaked out before the raise."""
     v = []
-    for _ in range(2000):
+    for _ in range(5000):
         v = [v]
     m = ProvenanceStore()
     with pytest.raises(ValueError):                   # in-memory: deepcopy guarded
@@ -340,7 +342,7 @@ def test_too_deep_value_fails_cleanly_not_recursionerror():
     assert m.recall("deep") is None                   # nothing stored (state intact)
     d = tempfile.mkdtemp(prefix="provmem_")
     p = ProvenanceStore(path=os.path.join(d, "m.jsonl"))
-    with pytest.raises(ValueError):                   # persist: _json_native guard
+    with pytest.raises(ValueError):                   # persist: _json_native guard + bounded repr in msg
         p.remember("deep", v)
 
 

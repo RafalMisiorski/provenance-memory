@@ -10,9 +10,9 @@ can rerun it in seconds with no model, key, or vector DB:
     python bench/bench_changed_facts.py
 
 For the mem0 comparison numbers (which need a local LLM + chromadb + ollama and are
-therefore not run here), see MEM0_HEADTOHEAD.md and the pre-registered receipts
-receipt_mem0_besteffort*.json. Summary of that pre-registered result, so the claim
-travels with its caveats:
+therefore not run here), see bench/bench_vs_mem0.py -- its header records the exact
+pre-registered run. Summary of that pre-registered result, so the claim travels with
+its caveats:
 
     on facts that change, STALE-recall rate (lower is better):
       mem0, naive (recall by similarity)        ~77.8%   [66, 86]
@@ -85,7 +85,7 @@ def main():
     print(f"  out-of-order  stale-recall: {stale_ooo}/{n_facts} = {rate(stale_ooo):.1f}%")
     print("  (out-of-order = writes arrive shuffled, logical time t intact)")
     print()
-    print("  reference (pre-registered, see MEM0_HEADTOHEAD.md -- NOT run here):")
+    print("  reference (pre-registered, see bench/bench_vs_mem0.py header -- NOT run here):")
     print("    mem0 naive       ~77.8% stale   |   mem0 best-effort ~25.4% stale")
     print("    caveat: a ~15-line max(t) hand-roll also = 0.0% (no moat; correctness + audit is the point)")
 

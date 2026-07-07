@@ -15,5 +15,10 @@ dependencies = []
 [project.optional-dependencies]
 test = ["pytest>=7"]
 
+[project.urls]
+Homepage = "https://github.com/RafalMisiorski/provenance-memory"
+Repository = "https://github.com/RafalMisiorski/provenance-memory"
+Issues = "https://github.com/RafalMisiorski/provenance-memory/issues"
+
 [tool.setuptools]
 py-modules = ["provenance_memory", "mem0_shim"]

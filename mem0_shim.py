@@ -6,7 +6,7 @@ mem0 is the memory layer most agent devs actually reach for. Its LLM write-path,
 however, does not reliably preserve the write-time metadata you attach, so on a fact
 that CHANGES ("refund window 30 -> 14 -> 7") it tends to keep every version and return
 a superseded one by similarity -- ~25% stale even when you sort its candidates by your
-own timestamp (measured, pre-registered: see bench/ and MEM0_HEADTOHEAD.md).
+own timestamp (measured, pre-registered: see bench/bench_vs_mem0.py).
 
 This adapter gives you mem0's shape (`add` / `search` / `get_all` / `get` / `reset`)
 backed by the deterministic provenance store, so a changed fact ALWAYS supersedes, at
@@ -75,7 +75,12 @@ class Memory:
         """Store or update a structured fact for `user_id`. The value with the greatest
         logical time is current; a strictly newer, different value supersedes. Returns the
         current authoritative record as a dict (see `audit`). NOTE: takes a (key, value)
-        fact, not a messages list -- see the module docstring on scope."""
+        fact, not a messages list -- see the module docstring on scope.
+
+        Mapping to the underlying store: `session` (the corroboration/who-wrote-it axis) is set to
+        `source or user_id`. So two writes with the SAME source corroborate; a write with no source
+        is attributed to `user_id`. If you need session and source to differ, call the underlying
+        ProvenanceStore.remember directly -- the shim deliberately collapses them for mem0 shape."""
         rec = self._store.remember(self._k(user_id, key), value,
                                    session=source or user_id, source=source, t=t)
         return self._as_dict(key, rec)
@@ -116,9 +121,13 @@ class Memory:
 
     # -- lifecycle -----------------------------------------------------------
     def reset(self) -> None:
-        """Drop all in-memory state. Does NOT truncate a persisted log (open a new path
-        for a fresh log); this mirrors keeping the audit trail append-only on disk."""
-        self._store = ProvenanceStore(path=None)
+        """Wipe all facts (mem0 `reset()` semantics). If a persistence path is set, the on-disk
+        log is TRUNCATED and writes keep persisting to the same path -- reset means a fresh but
+        still-durable store, NOT a silent switch to in-memory-only. A new process that re-opens
+        the path afterwards sees only facts written after the reset."""
+        if self._path is not None:
+            open(self._path, "w", encoding="utf-8").close()   # truncate the append-only log
+        self._store = ProvenanceStore(path=self._path)
 
     # -- internal ------------------------------------------------------------
     @staticmethod

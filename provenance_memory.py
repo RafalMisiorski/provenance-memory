@@ -3,7 +3,7 @@ cross-session facts, and can always tell you WHY it recalled something.
 
 Most agent memory is an append-only vector bag: every fact you write is added, nothing is ever
 superseded, and retrieval is "whatever cosine says is nearest". Three failure modes fall out of that
-(all measured in SAMB -- see ../REPLY_CARDS.md, receipt in ../receipt_v0.json):
+(the mem0 head-to-head that motivates them ships here as bench/bench_vs_mem0.py):
 
   STALE          a fact changes; the old value is still in the index; similarity can't tell which is
                  current, so you get the superseded one.
@@ -43,6 +43,10 @@ Persistence (opt-in, with a contract stated plainly rather than silently violate
       one bad line never bricks the store and never smuggles in a value the writer would have rejected.
     - SINGLE-WRITER per path. Two live stores appending to one file is unsupported (private clocks + no
       file lock -> auto-t collisions and divergent in-memory views).
+    - NOT crash-atomic per write: validation runs before any mutation, but the in-memory state is
+      updated and THEN the record is appended to disk. A mid-write I/O error (e.g. disk full) can
+      leave the last record in memory but not on disk; a subsequent reopen would not see it. State is
+      consistent within a process; durability of the final write is best-effort, not two-phase.
   A value nested beyond the interpreter's recursion limit (~hundreds deep) is rejected with a clear
   ValueError on store, not a RecursionError crash -- state is left intact.
 
@@ -57,6 +61,7 @@ import copy
 import json
 import math
 import os
+import reprlib
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -191,9 +196,12 @@ class ProvenanceStore:
         if persist and self._path is not None:
             for field, fv in (("value", value), ("session", session), ("source", source)):
                 if not _json_native(fv):
+                    # reprlib.repr (bounded maxlevel/maxlist) — a plain {fv!r} recurses on the very
+                    # kind of value this guard rejects (a too-deep structure), raising RecursionError
+                    # INSIDE the error message before the ValueError is built (version-dependent).
                     raise ValueError(
                         f"persistence mode requires JSON-native, round-trip-stable {field}; "
-                        f"got {type(fv).__name__} {fv!r} (use in-memory mode for arbitrary objects)")
+                        f"got {type(fv).__name__} {reprlib.repr(fv)} (use in-memory mode for arbitrary objects)")
         try:
             stored = copy.deepcopy(value)
         except RecursionError:
