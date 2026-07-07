@@ -16,12 +16,14 @@ No model, no API key, no vector DB. `pytest` is the only dependency, and only fo
 ```bash
 python -m pytest -q                     # 43 tests — the correctness properties as passing assertions
 python bench/bench_changed_facts.py     # prints 0.0% stale on 200 changed facts (in-order AND out-of-order)
+python bench/fuzz_oracle.py             # 4,000+ oracle checks vs an independent reference — exits red on divergence
 python provenance_memory.py             # live demo: recall / audit / history / determinism
 ```
 
 Every number in the credential above is checkable here: `pytest` runs the 43 tests (each defect the audits
-found is one of them); the benchmark prints `0.0%` stale; the full ledger with all 18 defects is in
-[`demo.html`](demo.html).
+found is one of them); the benchmark prints `0.0%` stale; the fuzz harness replays a deterministic random
+program against a ~30-line independent oracle (in-memory AND persistent+reload); the full ledger with all
+18 defects is in [`demo.html`](demo.html).
 
 ## What it does (30 seconds)
 
@@ -44,18 +46,22 @@ newest logical timestamp, is safe against out-of-order writes, and records the p
 
 ## vs mem0 (the library that actually targets this)
 
-On facts that **change** (pre-registered test, fully-local backend, no API key), STALE-recall rate — lower is
-better:
+On facts that **change**, STALE-recall rate from **our recorded run** (2026-07-05, pre-registered; the exact
+harness ships in this repo as [`bench/bench_vs_mem0.py`](bench/bench_vs_mem0.py)) — lower is better:
 
-| system | stale on changed facts |
-|---|---:|
-| mem0, naive (recall by similarity) | ~77.8% |
-| mem0, best-effort (recall by the timestamp you stored) | ~25.4% |
-| **provenance-memory** | **0.0%** |
+| system | stale on changed facts | 95% CI |
+|---|---:|---:|
+| mem0 2.0.11, naive (recall by similarity) | 77.8% (49/63) | [66.1, 86.3] |
+| mem0 2.0.11, best-effort (recall by the timestamp you stored) | 25.4% (16/63) | [16.3, 37.3] |
+| **provenance-memory** | **0.0%** | structural |
 
-mem0's LLM write-path doesn't reliably preserve the metadata you attach, so "newest-by-timestamp" degenerates
-back toward naive. Full ledger + caveats: [`demo.html`](demo.html) and the reference numbers printed by the
-benchmark.
+**Method + honest caveats** (in the harness header too): `mem0ai==2.0.11` pinned, fully-LOCAL backend
+(Ollama `llama3.1` write-path + `nomic-embed-text`) — **not the hosted mem0 product**; N=63 pooled over
+4 seeds; the STALE slice only (mem0 wins elsewhere, e.g. semantic/fuzzy retrieval); deterministic
+token-match scoring, no LLM judge. The mem0 rows are **not run in CI** (they need Ollama + an isolated
+venv — setup commands in the script header); our 0.0% row IS re-run by `bench_changed_facts.py` on every
+verify. Root cause of the gap: mem0's LLM write-path doesn't reliably preserve the metadata you attach, so
+"newest-by-timestamp" degenerates back toward naive. Full ledger: [`demo.html`](demo.html).
 
 ## Use it in place of mem0 (drop-in *shaped*)
 
